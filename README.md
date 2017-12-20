@@ -22,6 +22,17 @@ Including an example of how to use your role (for instance, with variables passe
       roles:
          - { role: username.rolename, x: 42 }
 
+
+eg:- install.yml
+     - name: message
+       hosts: server
+       tasks:
+       - include_role:
+             name: icinga2-client-setup
+
+     ansible-playbook install.yml 
+
+
 License
 -------
 
@@ -30,5 +41,6 @@ Apache
 Author Information
 ------------------
 
-An optional section for the role authors to include contact information, or a website (HTML is not allowed).
+
+
 # ansible-role-icinga2-client-setup
