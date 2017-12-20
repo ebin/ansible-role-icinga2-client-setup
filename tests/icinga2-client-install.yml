@@ -1,0 +1,6 @@
+---
+- name: starting the ansible script
+  hosts: localhost
+  tasks:
+  - include_role:
+       name: icinga2-client-setup

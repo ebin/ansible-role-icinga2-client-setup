@@ -1,0 +1,6 @@
+---
+# defaults file for icinga2-client-setup
+
+master_salt_key: "enter salt key"
+master_server: "enter icinga-master-server"
+master_ip_address: " enter icinga master ip address"

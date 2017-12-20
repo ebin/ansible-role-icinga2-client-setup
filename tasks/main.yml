@@ -1,0 +1,97 @@
+---
+# tasks file for icinga2-client-setup
+
+- name: include os specific variables
+  include_vars: "{{ ansible_os_family }}-{{ ansible_distribution_major_version }}.yml"
+
+- name: selinux disabled
+  selinux: policy=targeted state=disabled
+
+- name: install redhat-release package
+  yum: name=epel-release state=present
+
+- name: install icinga repo
+  yum:
+      name: "{{ icinga2_repo }}"
+      state: present
+
+- name: install icinga2
+  yum:
+      name: icinga2
+      state: present
+
+- name: install nagios plugins
+  yum:
+      name: nagios-plugins-all
+      state: present
+
+- name: enable icinga service
+  service:
+     name: icinga2
+     state: started
+     enabled: yes
+
+- name: add icingamaster hostname to hosts file
+  lineinfile:
+        path: /etc/hosts
+        regexp: '^{{ master_ip_address }}'
+        line: '{{ master_ip_address }} {{ master_server }}'
+
+
+- name: create directory /etc/icinga2/pki
+  file: path=/etc/icinga2/pki state=directory owner=icinga group=icinga
+
+- name: Generate self signed certificate for the local server
+  command: icinga2 pki new-cert --cn {{ ansible_fqdn }} --key /etc/icinga2/pki/{{ ansible_fqdn }}.key --cert /etc/icinga2/pki/{{ ansible_fqdn }}.crt
+
+- name: Request master certificate and store it as master-certificate.crt
+  command: icinga2 pki save-cert --key /etc/icinga2/pki/{{ ansible_fqdn }}.key --cert /etc/icinga2/pki/{{ ansible_fqdn }}.crt --trustedcert /etc/icinga2/pki/master-certificate.crt --host {{ master_server }}
+
+
+- name: generate icinag2 ticket
+  command: icinga2 pki ticket --cn {{ ansible_fqdn }} --salt {{ master_salt_key }}
+  register: client_ticket
+  changed_when: false
+
+- name: check if node setup needs happen
+  shell: grep {{ ansible_fqdn }} /etc/icinga2/constants.conf
+  register: node_setup
+  changed_when: false
+  ignore_errors: true
+
+- name: node setup
+  command: icinga2 node setup --ticket {{ client_ticket.stdout }} --endpoint {{ master_server }} --zone {{ ansible_fqdn }} --master_host {{ master_server }} --trustedcert /etc/icinga2/pki/master-certificate.crt
+#  when: node_setup.rc != 0
+
+- name: insert keys into env api.conf
+  lineinfile:
+    dest: "/etc/icinga2/features-enabled/api.conf"
+    insertafter: "{"
+    line: "{{ item }}"
+  with_items:
+    - cert_path = SysconfDir + "/icinga2/pki/<hostname>.crt"
+    - key_path = SysconfDir + "/icinga2/pki/<hostname>.key"
+    - ca_path = SysconfDir + "/icinga2/pki/ca.crt"
+
+- name: change accept_commands to true in api.conf
+  lineinfile:
+    dest: "/etc/icinga2/features-enabled/api.conf"
+    regexp: 'accept_commands ='
+    line: "{{ item }}"
+  with_items:
+    - accept_commands = true
+
+
+- name: change accept_configs to true in api.conf
+  lineinfile:
+    dest: "/etc/icinga2/features-enabled/api.conf"
+    regexp: 'accept_config ='
+    line: "{{ item }}"
+  with_items:
+    - accept_config = true
+
+
+- name: restart icinga2
+  service: name=icinga2 state=restarted
+
+
